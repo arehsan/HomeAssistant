@@ -1,0 +1,239 @@
+substitutions:
+  device_name: d1_2
+
+esphome:
+  name: ${device_name}
+  platform: ESP8266
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 10.0.0.32
+    gateway: 10.0.0.1
+    subnet: 255.255.255.0
+  ap:
+    ssid: !secret fallback_ssid
+    password: !secret fallback_password
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+i2c:
+  sda: D1
+  scl: D2
+  scan: True
+
+time:
+  - platform: homeassistant
+    timezone: Europe/Oslo
+    id: homeassistant_time
+
+font:
+  - file: 'slkscr.ttf'
+    id: font1
+    size: 8
+
+  - file: 'BebasNeue-Regular.ttf'
+    id: font2
+    size: 48
+
+  - file: 'BebasNeue-Regular.ttf'
+    id: font3
+    size: 14
+
+  - file: 'BebasNeue-Regular.ttf'
+    id: font4
+    size: 20
+  
+  - file: 'roboto-condensed-light.ttf'
+    id: font5
+    size: 20
+    
+image:
+  - file: "alarm.png"
+    id: alarm
+    resize: 16x16
+  - file: "volume-high.png"
+    id: volume_high
+    resize: 16x16
+  - file: "volume-low.png"
+    id: volume_low
+    resize: 16x16
+  - file: "volume-medium.png"
+    id: volume_medium
+    resize: 16x16
+  - file: "volume-off.png"
+    id: volume_off
+    resize: 16x16
+  - file: "lightbulb-on-outline.png"
+    id: lightbulb_on
+    resize: 16x16
+  - file: "lightbulb-off-outline.png"
+    id: lightbulb_off
+    resize: 16x16
+  
+display:
+  - platform: ssd1306_i2c
+    id: OLED
+    model: "SH1106 128x64"
+    address: 0x3C
+    brightness: 10.0%
+    lambda: |-
+      if (id(bedroom_brightness).state > 0){
+      
+        // Print current time
+        it.strftime(0, -8, id(font2), TextAlign::TOP_LEFT, "%H:%M", id(homeassistant_time).now());
+        
+        // Print inside temperature (from homeassistant sensor)
+        if (id(bme280_temperature).has_state()) {
+          it.printf(127, 2, id(font3), TextAlign::TOP_RIGHT , "%.1f°", id(bme280_temperature).state);
+        }
+  
+        // Print outside temperature (from homeassistant sensor)
+        if (id(outside_temperature).has_state()) {
+          it.printf(127, 35, id(font3), TextAlign::BASELINE_RIGHT , "%.1f°", id(outside_temperature).state);
+        }
+  
+        // Alarm clock
+        if (id(weekday_alarm).state) {
+        }
+        it.image(24, 48, id(lightbulb_on));
+        it.printf(48, 70, id(font4), TextAlign::BOTTOM_LEFT, "%s", id(next_alarm_time).state.c_str());
+      }
+      
+binary_sensor:
+  # Alarm status from homeassistant
+  - platform: homeassistant
+    id: weekday_sunrise
+    entity_id:  input_boolean.weekday_alarm_sunrise
+    internal: true
+    
+  - platform: homeassistant
+    id: weekend_sunrise
+    entity_id:  input_boolean.weekend_alarm_sunrise
+    internal: true
+    
+  - platform: homeassistant
+    id: weekday_alarm
+    entity_id:  input_boolean.weekday_alarm_sound
+    internal: true
+    
+  - platform: homeassistant
+    id: weekend_alarm
+    entity_id:  input_boolean.weekend_alarm_sound
+    internal: true
+    
+  - platform: homeassistant
+    id: workday
+    entity_id:  binary_sensor.workday_today
+
+text_sensor:
+  # Alarm time from homeassistant
+  - platform: homeassistant
+    id: next_alarm_time
+    entity_id:  sensor.next_alarm_time
+    internal: true
+    
+# Text sensors with general information
+  - platform: version
+    name: version
+  - platform: wifi_info
+    ip_address:
+      name: ip
+    ssid:
+      name: ssid
+    bssid:
+      name: bssid
+
+sensor:
+  # Outside temperature fra homeassistant
+  - platform: homeassistant
+    id: outside_temperature
+    entity_id: sensor.temperature3
+    internal: true
+  # Light level in the bedroom
+  - platform: homeassistant
+    id: bedroom_brightness
+    entity_id: sensor.bedroom_brightness
+    internal: true
+    on_value:
+      then:
+        lambda: |-
+          if (x > 0) {
+            id(OLED).set_brightness(x/254);
+            id(OLED).setup();
+          }
+    
+  # Uptime sensor
+  - platform: uptime
+    name: uptime
+      
+  # CO2 sensor
+  - platform: ccs811
+    eco2:
+      name: "${device_name} eCO2"
+    tvoc:
+      name: "${device_name} TVOC"
+    address: 0x5A
+    baseline: 0x7486
+    update_interval: 60s
+    temperature: bme280_temperature
+    humidity: bme280_humidity
+
+  # Temperatursensor
+  - platform: bme280
+    temperature:
+      id: bme280_temperature
+      name: "temperature2"
+      accuracy_decimals: 1
+#      oversampling: 4x
+#      filters:
+#        - offset: -2.0
+    pressure:
+      id: bme280_pressure
+      name: "pressure2"
+      accuracy_decimals: 1
+#      oversampling: 4x
+    humidity:
+      id: bme280_humidity
+      name: "humidity2"
+      accuracy_decimals: 1
+#      oversampling: 4x
+#    iir_filter: 4x
+    address: 0x76
+    update_interval: 30s
+
+  - platform: wifi_signal
+    name: "wifi_d1_2"
+    update_interval: 60s
+    
+  - platform: template
+    name: "Equivalent sea level pressure 2"
+    lambda: |-
+      const float STANDARD_ALTITUDE = 208; // in meters, see note
+      return id(bme280_pressure).state / powf(1 - ((0.0065 * STANDARD_ALTITUDE) /
+        (id(bme280_temperature).state + (0.0065 * STANDARD_ALTITUDE) + 273.15)), 5.257); // in hPa
+    update_interval: 15s
+    unit_of_measurement: "hPa"
+    icon: "mdi:gauge"
+  - platform: template
+    name: "Absolute Humidity 2"
+    lambda: |-
+      const float mw = 18.01534;    // molar mass of water g/mol
+      const float r = 8.31447215;   // Universal gas constant J/mol/K
+      return (6.112 * powf(2.718281828, (17.67 * id(bme280_temperature).state) /
+        (id(bme280_temperature).state + 243.5)) * id(bme280_humidity).state * mw) /
+        ((273.15 + id(bme280_temperature).state) * r); // in grams/m^3
+    accuracy_decimals: 2
+    update_interval: 15s
+    unit_of_measurement: "g/m^3"
+    icon: "mdi:water-percent"
