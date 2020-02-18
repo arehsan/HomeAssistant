@@ -1,0 +1,108 @@
+sensor:
+  # Entur public transit
+  - platform: entur_public_transport
+    name: Transport
+    expand_platforms: true
+    number_of_departures: 10
+    stop_ids:
+      - 'NSR:Quay:11035'      # Stig mot sentrum
+    line_whitelist:
+      - 'RUT:Line:31'
+
+  - platform: entur_public_transport
+    name: Transport
+    expand_platforms: true
+    number_of_departures: 5
+    stop_ids:
+      - 'NSR:Quay:11039'      # Ostreheimsveien mot sentrum
+    line_whitelist:
+      - 'RUT:Line:33'
+
+  # Template sensors
+  - platform: template
+    sensors:
+      bus_stig_31:
+        friendly_name: "31-buss fra Stig"
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {{ states('sensor.transport_stig_platform_11035') }}
+        attribute_templates:
+          departure_1:  >-
+            {{ states('sensor.transport_stig_platform_11035') }}
+          departure_2: >-
+            {{ state_attr('sensor.transport_stig_platform_11035', 'next_due_in')[:-4] }}
+          departure_3: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#3') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_4: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#4') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_5: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#5') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_6: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#6') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_7: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#7') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_8: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#8') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_9: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#9') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_10: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_stig_platform_11035', 'departure_#10') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+      
+      bus_stig_31_first:
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {% for attr in states.sensor.bus_stig_31.attributes if attr.startswith('departure') and state_attr('sensor.bus_stig_31',attr) | int > 5 -%}
+            {% if loop.first -%}
+              {{ state_attr('sensor.bus_stig_31',attr) }}
+            {%- endif %}  
+          {% endfor %}
+
+      bus_stig_31_second:
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {% for attr in states.sensor.bus_stig_31.attributes if attr.startswith('departure') and state_attr('sensor.bus_stig_31',attr) | int > 5 -%}
+            {% if loop.index == 2 -%}
+              {{ state_attr('sensor.bus_stig_31',attr) }}
+            {%- endif %}
+          {% endfor %}
+
+      bus_ostreheimsveien_33:
+        friendly_name: "33-buss fra Østreheimsveien"
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {{ states('sensor.transport_ostreheimsveien_platform_11039') }}
+        attribute_templates:
+          departure_1:  >-
+            {{ states('sensor.transport_ostreheimsveien_platform_11039') }}
+          departure_2: >-
+            {{ state_attr('sensor.transport_ostreheimsveien_platform_11039', 'next_due_in')[:-4] }}
+          departure_3: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_ostreheimsveien_platform_11039', 'departure_#3') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_4: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_ostreheimsveien_platform_11039', 'departure_#4') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+          departure_5: >-
+            {{ ((as_timestamp(states('sensor.date') + ' ' + (state_attr('sensor.transport_ostreheimsveien_platform_11039', 'departure_#5') | regex_findall_index('[0-2][0-9]:[0-5][0-9]'))) - as_timestamp(now())) / 60) | int }}
+
+      bus_ostreheimsveien_33_first:
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {% for attr in states.sensor.bus_ostreheimsveien_33.attributes if attr.startswith('departure') and state_attr('sensor.bus_ostreheimsveien_33',attr) | int > 4 -%}
+            {% if loop.first -%}
+              {{ state_attr('sensor.bus_ostreheimsveien_33',attr) }}
+            {%- endif %}
+          {% endfor %}
+
+      bus_ostreheimsveien_33_second:
+        icon_template: mdi:bus
+        unit_of_measurement: 'min'
+        value_template: >-
+          {% for attr in states.sensor.bus_ostreheimsveien_33.attributes if attr.startswith('departure') and state_attr('sensor.bus_ostreheimsveien_33',attr) | int > 4 -%}
+            {% if loop.index == 2 -%}
+              {{ state_attr('sensor.bus_ostreheimsveien_33',attr) }}
+            {%- endif %}
+          {% endfor %}
