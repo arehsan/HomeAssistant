@@ -1,0 +1,223 @@
+###########################################
+#  
+# ToDO:
+# 1. Buttons: https://community.home-assistant.io/t/esphome-buttons/158390/10
+# 2. Adjust time with button
+#
+###########################################
+
+
+binary_sensor:
+  # Is it a workday today?
+  - platform: workday
+    country: "NO"
+    name: "Workday today"
+  # Is it a workday tomorrow?
+  - platform: workday
+    country: "NO"
+    name: "Workday tomorrow"
+    days_offset: 1
+
+input_number:
+  # The duration of the wake-up light (not in use)
+  sunrise_duration:
+    name: 'Sunrise duration'
+    icon: mdi:timer
+    min: 1
+    max: 30
+    step: 1
+
+input_boolean:
+  # Is the wake-up light active on workdays?
+  weekday_alarm_sunrise:
+  # Is the wake-up light active on weekends?
+  weekend_alarm_sunrise:
+  # Is the alarm sound active on workdays?
+  weekday_alarm_sound:
+  # Is the alarm sound active on weekends?
+  weekend_alarm_sound:
+
+input_datetime:
+  weekday_alarm:
+    has_time: true
+  weekend_alarm:
+    has_time: true
+  alarm_snooze:
+    has_time: true
+
+sensor:
+  - platform: template
+    sensors:
+      # Get the brighness of the bedroom-lights. Used to adjust the screen-brighness of the alarm clock
+      bedroom_brightness:
+        friendly_name: "Bedroom Brighness"
+        unit_of_measurement: 'x'
+        value_template: >-
+          {% if is_state('light.soverom', 'off') %}
+            0
+          {% elif ( is_state('light.soverom_spot_1', 'on') or is_state('light.soverom_spot_2', 'on') or is_state('light.soverom_spot_3', 'on') ) %}
+            {{ expand('light.soverom_spot_1', 'light.soverom_spot_2', 'light.soverom_spot_3') | selectattr("attributes.brightness", 'defined') | sum(attribute="attributes.brightness") | multiply(1/3) }}
+          {% endif %}
+
+      # When will the alarm activate today
+      today_alarm_time:
+        friendly_name: 'Today Alarm Time'
+        value_template: >-
+          {% if is_state('binary_sensor.workday_today','on') %}
+            {{ (state_attr('input_datetime.weekday_alarm', 'timestamp') | int | timestamp_custom('%H:%M', False)) }}
+          {% else %}
+            {{ (state_attr('input_datetime.weekend_alarm', 'timestamp') | int | timestamp_custom('%H:%M', False)) }}
+          {% endif %}
+        attribute_templates:
+          timestamp:  >-
+            {% if is_state('binary_sensor.workday_today','on') %}
+              {{ state_attr('input_datetime.weekday_alarm', 'timestamp') }}
+            {% else %}
+              {{ state_attr('input_datetime.weekend_alarm', 'timestamp') }}
+            {% endif %}
+
+      # When will the alarm activate tomorrow
+      tomorrow_alarm_time:
+        friendly_name: 'Tomorrow Alarm Time'
+        value_template: >-
+          {% if is_state('binary_sensor.workday_tomorrow','on') %}
+            {{ (state_attr('input_datetime.weekday_alarm', 'timestamp') | int | timestamp_custom('%H:%M', False)) }}
+          {% else %}
+            {{ (state_attr('input_datetime.weekend_alarm', 'timestamp') | int | timestamp_custom('%H:%M', False)) }}
+          {% endif %}
+
+      # When will the alarm activate next (either later today or tomorrow)
+      next_alarm_time:
+        friendly_name: 'Next Alarm Time'
+        value_template: >-
+          {% if as_timestamp(strptime(states('sensor.today_alarm_time'),'%H:%M').replace(year=now().year, month=now().month, day=now().day, second=now().second)) < as_timestamp(now()) %}
+            {{ states('sensor.tomorrow_alarm_time') }}
+          {% else %}
+            {{ states('sensor.today_alarm_time') }}
+          {% endif %}
+
+automation:
+  # Automation to trigger the wake up light
+  - id: 'alarm-clock-sunrise'
+    alias: 'Alarm Clock: Sunrise'
+    description: ''
+    trigger:
+    - platform: template
+      value_template: "{{ states('sensor.time') == states('sensor.today_alarm_time') }}"
+    condition:
+      condition: or
+      conditions:
+        - condition: and
+          conditions:
+            - condition: state
+              entity_id: input_boolean.weekday_sunrise
+              state: 'on'
+            - condition: state
+              entity_id: binary_sensor.workday_today
+              state: 'on'
+        - condition: and
+          conditions:
+            - condition: state
+              entity_id: input_boolean.weekend_sunrise
+              state: 'on'
+            - condition: state
+              entity_id: binary_sensor.workday_today
+              state: 'off'
+    action:
+    - delay: 10s
+  # Automation to trigger the alarm sound
+  - id: 'alarm-clock-sound'
+    alias: 'Alarm Clock: Sound'
+    description: ''
+    trigger:
+    - platform: template
+      value_template: "{{ states('sensor.time') == states('sensor.today_alarm_time') }}"
+    condition:
+      condition: or
+      conditions:
+        - condition: and
+          conditions:
+            - condition: state
+              entity_id: input_boolean.weekday_alarm
+              state: 'on'
+            - condition: state
+              entity_id: binary_sensor.workday_today
+              state: 'on'
+        - condition: and
+          conditions:
+            - condition: state
+              entity_id: input_boolean.weekend_alarm
+              state: 'on'
+            - condition: state
+              entity_id: binary_sensor.workday_today
+              state: 'off'
+    action:
+    - delay: 10s
+
+
+script:
+  # Script to activate the wake-up light (three Hue-spots)
+  sunrise:
+    sequence:
+    - data:
+        brightness: 1
+        entity_id: light.soverom_spot_2
+        kelvin: 2200
+      service: light.turn_on
+    - delay: 00:00:03
+    - data:
+        brightness: 30
+        entity_id: light.soverom_spot_2
+        kelvin: 2200
+        transition: 50
+      service: light.turn_on
+    - delay: 00:00:60
+    - data:
+        brightness: 1
+        entity_id: light.soverom_spot_3
+        kelvin: 2200
+      service: light.turn_on
+    - delay: 00:00:03
+    - data:
+        brightness: 30
+        entity_id: light.soverom_spot_3
+        kelvin: 2200
+        transition: 50
+      service: light.turn_on
+    - delay: 00:00:30
+    - data:
+        brightness: 1
+        entity_id: light.soverom_spot_1
+        kelvin: 2200
+      service: light.turn_on
+    - delay: 00:00:03
+    - data:
+        brightness: 30
+        entity_id: light.soverom_spot_1
+        kelvin: 2200
+        transition: 50
+      service: light.turn_on
+    - delay: 00:00:60
+    - data:
+        brightness: 255
+        entity_id: light.soverom
+        kelvin: 3500
+        transition: 600
+      service: homeassistant.turn_on
+    alias: Sunrise
+
+# Group the alarm configuration for lovelace
+group:
+  weekday_sunrise_panel:
+      name: Weekday Alarm Clock
+      entities:
+        - input_boolean.weekday_alarm_sunrise
+        - input_boolean.weekday_alarm_sound
+        - input_datetime.weekday_alarm
+
+  weekend_sunrise_panel:
+      name: Weekend Alarm Clock
+      entities:
+        - input_boolean.weekend_alarm_sunrise
+        - input_boolean.weekend_alarm_sound
+        - input_datetime.weekend_alarm
